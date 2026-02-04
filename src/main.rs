@@ -1,11 +1,20 @@
 use nix::unistd;
-use std::path::{self, Path, PathBuf};
-use std::{ffi::CString, panic::UnwindSafe};
+use std::ffi::CString;
+use std::io::Write;
+use std::path::PathBuf;
 
 fn main() {
     let stdin = std::io::stdin();
     let mut line = String::new();
+    let username = unistd::User::from_uid(unistd::getuid())
+        .unwrap()
+        .unwrap()
+        .name;
+    let hostname = unistd::gethostname().unwrap().into_string().unwrap();
     loop {
+        print!("[{}@{}]$ ", username, hostname);
+        std::io::stdout().flush().unwrap();
+        line.clear();
         stdin.read_line(&mut line).unwrap();
         let mut line_it = line.split(" ");
         let exec = line_it.next().unwrap();
