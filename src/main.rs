@@ -8,6 +8,7 @@ use crate::posix_wrappers::find_binary_using_path;
 use crate::termios::TermiosContext;
 
 mod posix_wrappers;
+mod prefix_tree;
 mod prompt;
 mod termios;
 fn main() {
