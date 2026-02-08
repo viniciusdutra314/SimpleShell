@@ -1,4 +1,3 @@
-use libc::tcsetattr;
 
 pub struct TermiosContext {
     initial_context: libc::termios,

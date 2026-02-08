@@ -1,0 +1,8 @@
+disallowed-types = [
+    "std::fs::File",
+    "std::fs::OpenOptions",
+    "std::fs::ReadDir",
+    "std::fs::DirEntry",
+    "std::path::Path",
+    "std::path::PathBuf",
+]

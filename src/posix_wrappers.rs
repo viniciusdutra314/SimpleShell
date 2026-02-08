@@ -1,7 +1,57 @@
-use std::{
-    ffi::{CStr, CString},
-    path::Path,
-};
+use std::ffi::{CStr, CString};
+use std::ops::Deref;
+#[repr(transparent)]
+pub struct PosixPath {
+    buffer: CString,
+}
+
+impl PosixPath {
+    pub fn is_dir(&self) -> bool {
+        let mut buffer_uninit = std::mem::MaybeUninit::<libc::stat>::uninit();
+        unsafe { libc::stat(self.buffer.as_ptr(), buffer_uninit.as_mut_ptr()) };
+        let buffer = unsafe { buffer_uninit.assume_init() };
+        return (buffer.st_mode & libc::S_IFMT) == libc::S_IFDIR;
+    }
+
+    fn validate_path(directory: &CStr) -> bool {
+        let mut buffer_uninit = std::mem::MaybeUninit::<libc::stat>::uninit();
+        return unsafe { libc::stat(directory.as_ptr(), buffer_uninit.as_mut_ptr()) } == 0;
+    }
+}
+#[derive(Debug)]
+pub struct InvalidPathError;
+impl TryFrom<&CStr> for PosixPath {
+    type Error = InvalidPathError;
+
+    fn try_from(s: &CStr) -> Result<Self, Self::Error> {
+        if PosixPath::validate_path(s) {
+            Ok(PosixPath {
+                buffer: s.to_owned(),
+            })
+        } else {
+            Err(InvalidPathError)
+        }
+    }
+}
+
+impl TryFrom<&str> for PosixPath {
+    type Error = InvalidPathError;
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let c_string = CString::new(s).map_err(|_| InvalidPathError)?;
+        if PosixPath::validate_path(&c_string) {
+            Ok(PosixPath { buffer: c_string })
+        } else {
+            Err(InvalidPathError)
+        }
+    }
+}
+
+impl Deref for PosixPath {
+    type Target = CString;
+    fn deref(&self) -> &Self::Target {
+        &self.buffer
+    }
+}
 
 pub fn get_username() -> Option<String> {
     unsafe {
@@ -35,12 +85,9 @@ pub fn get_hostname() -> Option<String> {
     }
 }
 
-pub fn chdir(path: &Path) -> bool {
-    use std::os::unix::ffi::OsStrExt;
+pub fn chdir(path: &PosixPath) -> bool {
     if path.is_dir() {
-        if let Ok(path_c) = std::ffi::CString::new(path.as_os_str().as_bytes()) {
-            return unsafe { libc::chdir(path_c.as_ptr()) == 0 };
-        }
+        return unsafe { libc::chdir(path.as_ptr()) == 0 };
     }
     false
 }
@@ -69,18 +116,6 @@ pub fn fork_and_execve(binary_path: &CStr, arguments: &[CString]) -> Result<(), 
     Ok(())
 }
 pub fn find_binary_using_path(command: &str) -> Option<CString> {
-    if command.contains('/') {
-        // If command contains a slash, it's a direct path.
-        // Check if it exists and is executable.
-        let c_command = CString::new(command).ok()?;
-        unsafe {
-            if libc::access(c_command.as_ptr(), libc::X_OK) == 0 {
-                return Some(c_command);
-            }
-        }
-        return None;
-    }
-
     let path_var = match std::env::var("PATH") {
         Ok(val) => val,
         Err(_) => return None,
@@ -96,6 +131,5 @@ pub fn find_binary_using_path(command: &str) -> Option<CString> {
             }
         }
     }
-
     None
 }

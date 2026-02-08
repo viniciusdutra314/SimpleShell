@@ -1,16 +1,13 @@
+#![deny(clippy::disallowed_types)]
+
 use std::ffi::CString;
 use std::io::Write;
-use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
-use std::ptr;
 
-use crate::posix_wrappers::find_binary_using_path;
 use crate::termios::TermiosContext;
-
 mod posix_wrappers;
 mod prefix_tree;
-mod prompt;
 mod termios;
+
 fn main() {
     let termios_context = termios::TermiosContext::new().unwrap();
     let mut new_context = termios_context.get_initial();
@@ -45,13 +42,13 @@ fn main() {
             "exit" => return (),
             "cd" => {
                 if let Some(path_str) = split_iter.next() {
-                    let path = PathBuf::from(path_str);
-                    if !posix_wrappers::chdir(path.as_ref()) {
+                    let path = posix_wrappers::PosixPath::try_from(path_str).unwrap();
+                    if !posix_wrappers::chdir(&path) {
                         println!("No such file or directory {}", path_str);
                     }
                 } else {
                     if let Ok(home_dir) = std::env::var("HOME") {
-                        let path = PathBuf::from(home_dir);
+                        let path = posix_wrappers::PosixPath::try_from(home_dir.as_str()).unwrap();
                         if !posix_wrappers::chdir(&path) {
                             println!("Failed to change to HOME directory");
                         }
@@ -60,8 +57,9 @@ fn main() {
                     }
                 }
             }
+
             _ => {
-                let exec_path = find_binary_using_path(command).unwrap();
+                let exec_path = posix_wrappers::find_binary_using_path(command).unwrap();
                 let arguments: Vec<CString> =
                     split_iter.map(|s| CString::new(s).unwrap()).collect();
                 posix_wrappers::fork_and_execve(&exec_path, &arguments).unwrap();
